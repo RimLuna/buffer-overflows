@@ -180,3 +180,4 @@ whoami
 Segmentation fault (core dumped)
 ```
 **wtf, doesn't fucking work, nice, fuck this shit**
+## FUCK 64-BIT, UGH
